@@ -1,0 +1,7 @@
+{
+  "name": "atrl astv ersion product2",
+  "description": "An empowering travel companion for women featuring AI-driven safety analysis, trusted local recommendations, and a supportive community.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
