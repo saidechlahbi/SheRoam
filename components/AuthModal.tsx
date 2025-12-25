@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Mail, Facebook, Loader2, ArrowLeft, CheckCircle } from 'lucide-react';
 import { UserProfile } from '../types';
+import * as authService from '../services/authService';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -9,12 +10,13 @@ interface AuthModalProps {
   onLogin: (user: UserProfile) => void;
 }
 
-type AuthStep = 'SELECT' | 'EMAIL' | 'VERIFY';
+type AuthStep = 'SELECT' | 'EMAIL_SIGNUP' | 'EMAIL_LOGIN';
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }) => {
   const [step, setStep] = useState<AuthStep>('SELECT');
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState<string | null>(null);
   const [error, setError] = useState('');
 
@@ -23,7 +25,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }) => {
     if (isOpen) {
       setStep('SELECT');
       setEmail('');
-      setCode('');
+      setPassword('');
+      setName('');
       setError('');
       setIsLoading(null);
     }
@@ -31,63 +34,73 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }) => {
 
   if (!isOpen) return null;
 
-  const handleSocialLogin = (provider: string) => {
-    setIsLoading(provider);
-    // Simulate network request
-    setTimeout(() => {
-      onLogin({
-        name: 'Sarah Jenkins',
-        email: 'sarah.jenkins@example.com',
-        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150&h=150'
-      });
-      setIsLoading(null);
-    }, 1500);
+  const handleGoogleLogin = () => {
+    setIsLoading('Google');
+    authService.loginWithGoogle();
   };
 
-  const handleSendCode = (e: React.FormEvent) => {
+  const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    
     if (!email.includes('@') || !email.includes('.')) {
       setError('Please enter a valid email address.');
       return;
     }
-    setError('');
-    setIsLoading('email');
     
-    // Simulate sending code
-    setTimeout(() => {
-      setIsLoading(null);
-      setStep('VERIFY');
-    }, 1200);
-  };
-
-  const handleVerifyCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (code.length < 4) {
-      setError('Please enter the 4-digit code sent to your email.');
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
       return;
     }
-    setError('');
-    setIsLoading('verify');
+    
+    setIsLoading('email_signup');
+    
+    try {
+      const { user } = await authService.register(email, password, name);
+      onLogin(user);
+      setIsLoading(null);
+    } catch (err: any) {
+      setError(err.message || 'Registration failed. Please try again.');
+      setIsLoading(null);
+    }
+  };
 
-    // Simulate verification
-    setTimeout(() => {
-      if (code === '1234') {
-        onLogin({
-          name: email.split('@')[0],
-          email: email,
-        });
-      } else {
-        setError('Invalid code. Try 1234.');
-        setIsLoading(null);
-      }
-    }, 1500);
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!email || !password) {
+      setError('Please enter both email and password.');
+      return;
+    }
+    
+    setIsLoading('email_login');
+    
+    try {
+      const { user } = await authService.login(email, password);
+      onLogin(user);
+      setIsLoading(null);
+    } catch (err: any) {
+      setError(err.message || 'Login failed. Please check your credentials.');
+      setIsLoading(null);
+    }
   };
 
   const renderContent = () => {
     switch (step) {
-      case 'EMAIL':
+      case 'EMAIL_SIGNUP':
         return (
-          <form onSubmit={handleSendCode} className="space-y-4 animate-fade-in">
+          <form onSubmit={handleEmailSignup} className="space-y-4 animate-fade-in">
+            <div className="text-left">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name (Optional)</label>
+              <input 
+                type="text" 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your name"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition"
+              />
+            </div>
             <div className="text-left">
               <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
               <input 
@@ -96,53 +109,86 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }) => {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition"
+                required
                 autoFocus
+              />
+            </div>
+            <div className="text-left">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 6 characters"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition"
+                required
               />
             </div>
             {error && <p className="text-red-500 text-sm text-left">{error}</p>}
             <button 
               type="submit"
               disabled={!!isLoading}
-              className="w-full bg-rose-600 text-white py-3.5 rounded-xl font-medium hover:bg-rose-700 transition flex justify-center items-center"
+              className="w-full bg-rose-600 text-white py-3.5 rounded-xl font-medium hover:bg-rose-700 transition flex justify-center items-center disabled:opacity-70"
             >
-              {isLoading === 'email' ? <Loader2 className="animate-spin w-5 h-5" /> : 'Send Code'}
+              {isLoading === 'email_signup' ? <Loader2 className="animate-spin w-5 h-5" /> : 'Sign Up'}
             </button>
+            <div className="text-center text-sm text-gray-600">
+              Already have an account?{' '}
+              <button 
+                type="button"
+                onClick={() => { setStep('EMAIL_LOGIN'); setError(''); }}
+                className="text-rose-600 font-medium hover:underline"
+              >
+                Sign In
+              </button>
+            </div>
           </form>
         );
 
-      case 'VERIFY':
+      case 'EMAIL_LOGIN':
         return (
-          <form onSubmit={handleVerifyCode} className="space-y-4 animate-fade-in">
-             <div className="text-left">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Verification Code</label>
-              <p className="text-xs text-gray-500 mb-3">We sent a code to <span className="font-semibold">{email}</span></p>
-              <div className="flex gap-2 justify-center my-4">
-                 <input 
-                  type="text" 
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  placeholder="1234"
-                  className="w-full text-center text-3xl tracking-[1em] font-mono py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-rose-500 outline-none transition"
-                  maxLength={4}
-                  autoFocus
-                />
-              </div>
+          <form onSubmit={handleEmailLogin} className="space-y-4 animate-fade-in">
+            <div className="text-left">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+              <input 
+                type="email" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition"
+                required
+                autoFocus
+              />
             </div>
-            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+            <div className="text-left">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Your password"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition"
+                required
+              />
+            </div>
+            {error && <p className="text-red-500 text-sm text-left">{error}</p>}
             <button 
               type="submit"
               disabled={!!isLoading}
-              className="w-full bg-rose-600 text-white py-3.5 rounded-xl font-medium hover:bg-rose-700 transition flex justify-center items-center"
+              className="w-full bg-rose-600 text-white py-3.5 rounded-xl font-medium hover:bg-rose-700 transition flex justify-center items-center disabled:opacity-70"
             >
-              {isLoading === 'verify' ? <Loader2 className="animate-spin w-5 h-5" /> : 'Verify & Login'}
+              {isLoading === 'email_login' ? <Loader2 className="animate-spin w-5 h-5" /> : 'Sign In'}
             </button>
-            <button 
-              type="button"
-              onClick={() => setStep('EMAIL')}
-              className="text-sm text-gray-500 hover:text-rose-600 transition"
-            >
-              Change email address
-            </button>
+            <div className="text-center text-sm text-gray-600">
+              Don't have an account?{' '}
+              <button 
+                type="button"
+                onClick={() => { setStep('EMAIL_SIGNUP'); setError(''); }}
+                className="text-rose-600 font-medium hover:underline"
+              >
+                Sign Up
+              </button>
+            </div>
           </form>
         );
 
@@ -151,7 +197,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }) => {
         return (
           <div className="space-y-4 animate-fade-in">
             <button 
-              onClick={() => handleSocialLogin('Google')}
+              onClick={handleGoogleLogin}
               disabled={!!isLoading}
               className="w-full flex items-center justify-center gap-3 px-6 py-3.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition font-medium text-gray-700 relative group overflow-hidden disabled:opacity-70 disabled:cursor-not-allowed"
             >
@@ -169,29 +215,23 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }) => {
                  </>
                )}
             </button>
-
-            <button 
-               onClick={() => handleSocialLogin('Facebook')}
-               disabled={!!isLoading}
-               className="w-full flex items-center justify-center gap-3 px-6 py-3.5 bg-[#1877F2] text-white rounded-xl hover:bg-[#1864D9] transition font-medium disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isLoading === 'Facebook' ? (
-                 <Loader2 className="w-5 h-5 animate-spin text-white" />
-               ) : (
-                 <>
-                  <Facebook className="w-5 h-5 fill-current" />
-                  <span>Continue with Facebook</span>
-                 </>
-               )}
-            </button>
+            
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">or</span>
+              </div>
+            </div>
             
             <button 
-               onClick={() => setStep('EMAIL')}
+               onClick={() => setStep('EMAIL_SIGNUP')}
                disabled={!!isLoading}
-               className="w-full flex items-center justify-center gap-3 px-6 py-3.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition font-medium text-gray-700 disabled:opacity-70 disabled:cursor-not-allowed"
+               className="w-full flex items-center justify-center gap-3 px-6 py-3.5 bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition font-medium disabled:opacity-70 disabled:cursor-not-allowed"
             >
                {isLoading === 'Email' ? (
-                 <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
+                 <Loader2 className="w-5 h-5 animate-spin text-white" />
                ) : (
                  <>
                   <Mail className="w-5 h-5" />
@@ -199,6 +239,17 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }) => {
                  </>
                )}
             </button>
+            
+            <div className="text-center text-sm text-gray-600 mt-4">
+              Already have an account?{' '}
+              <button 
+                type="button"
+                onClick={() => setStep('EMAIL_LOGIN')}
+                className="text-rose-600 font-medium hover:underline"
+              >
+                Sign In
+              </button>
+            </div>
           </div>
         );
     }
@@ -216,7 +267,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }) => {
       <div className="relative bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-fade-in-up overflow-hidden">
         <div className="flex items-center justify-between mb-6">
            {step !== 'SELECT' ? (
-             <button onClick={() => setStep(step === 'VERIFY' ? 'EMAIL' : 'SELECT')} className="p-2 -ml-2 text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition">
+             <button onClick={() => { setStep('SELECT'); setError(''); }} className="p-2 -ml-2 text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition">
                 <ArrowLeft className="w-5 h-5" />
              </button>
            ) : <div />}
@@ -231,10 +282,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }) => {
 
         <div className="text-center mb-8">
           <h3 className="text-2xl font-serif font-bold text-gray-900 mb-2">
-            {step === 'VERIFY' ? 'Check your Inbox' : step === 'EMAIL' ? 'Your Email' : 'Join SheRoam'}
+            {step === 'EMAIL_SIGNUP' ? 'Create Account' : step === 'EMAIL_LOGIN' ? 'Welcome Back' : 'Join SheRoam'}
           </h3>
           <p className="text-gray-500">
-            {step === 'VERIFY' ? 'Enter the 4-digit code to verify your account.' : 'Connect with travelers, share stories, and explore safely.'}
+            {step === 'EMAIL_SIGNUP' ? 'Sign up to start your journey.' : step === 'EMAIL_LOGIN' ? 'Sign in to continue your adventure.' : 'Connect with travelers, share stories, and explore safely.'}
           </p>
         </div>
 

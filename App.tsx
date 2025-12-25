@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import SafetyAnalysis from './components/SafetyAnalysis';
 import PlaceFinder from './components/PlaceFinder';
@@ -10,19 +10,50 @@ import Blog from './components/Blog';
 import Footer from './components/Footer';
 import { AppView, UserProfile } from './types';
 import { ArrowRight, Globe, ShieldCheck, Heart, Search, CheckCircle, Users } from 'lucide-react';
+import * as authService from './services/authService';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.HOME);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
+
+  // Check for OAuth callback and restore user session
+  useEffect(() => {
+    const initAuth = async () => {
+      // Handle OAuth callback
+      const token = authService.handleOAuthCallback();
+      
+      // Try to get current user if we have a token
+      if (token || authService.isAuthenticated()) {
+        try {
+          const currentUser = await authService.getCurrentUser();
+          if (currentUser) {
+            setUser(currentUser);
+          }
+        } catch (error) {
+          console.error('Failed to restore user session:', error);
+        }
+      }
+      
+      setIsLoadingUser(false);
+    };
+    
+    initAuth();
+  }, []);
 
   const handleLogin = (userData: UserProfile) => {
     setUser(userData);
     setIsAuthOpen(false);
   };
 
-  const handleLogout = () => {
-    setUser(null);
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+      setUser(null);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   // Helper to wrap content with footer (only for main pages that scroll)
