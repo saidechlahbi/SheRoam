@@ -10,8 +10,7 @@ import Blog from './components/Blog';
 import Footer from './components/Footer';
 import { AppView, UserProfile } from './types';
 import { ArrowRight, Globe, ShieldCheck, Heart, Search, CheckCircle, Users } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { API_URL } from './config';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.HOME);

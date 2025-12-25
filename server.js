@@ -14,15 +14,34 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 // Load environment variables
-dotenv.config({ path: '.env.local' });
+dotenv.config({ path: ['.env.local', '.env'] });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Security: JWT secret
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = '7d';
+
+// Security: Session secret
+const SESSION_SECRET = process.env.SESSION_SECRET;
+
+// Validate required secrets in production
+if (process.env.NODE_ENV === 'production') {
+	if (!JWT_SECRET || JWT_SECRET === 'your-secret-key-change-in-production') {
+		console.error('❌ JWT_SECRET must be set in production environment');
+		process.exit(1);
+	}
+	if (!SESSION_SECRET || SESSION_SECRET === 'session-secret-change-in-production') {
+		console.error('❌ SESSION_SECRET must be set in production environment');
+		process.exit(1);
+	}
+}
+
+// Use default secrets only in development
+const jwtSecret = JWT_SECRET || 'dev-jwt-secret-change-in-production';
+const sessionSecret = SESSION_SECRET || 'dev-session-secret-change-in-production';
 
 // Middleware
 app.use(helmet({
@@ -37,7 +56,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Session middleware (required for Passport)
 app.use(session({
-	secret: process.env.SESSION_SECRET || 'session-secret-change-in-production',
+	secret: sessionSecret,
 	resave: false,
 	saveUninitialized: false,
 	cookie: {
@@ -146,7 +165,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 const generateToken = (user) => {
 	return jwt.sign(
 		{ id: user.id, email: user.email },
-		JWT_SECRET,
+		jwtSecret,
 		{ expiresIn: JWT_EXPIRES_IN }
 	);
 };
@@ -160,7 +179,7 @@ const authenticateToken = (req, res, next) => {
 		return res.status(401).json({ error: 'Access token required' });
 	}
 
-	jwt.verify(token, JWT_SECRET, (err, user) => {
+	jwt.verify(token, jwtSecret, (err, user) => {
 		if (err) return res.status(403).json({ error: 'Invalid or expired token' });
 		req.user = user;
 		next();

@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Mail, Facebook, Loader2, ArrowLeft, CheckCircle } from 'lucide-react';
 import { UserProfile } from '../types';
+import { API_URL } from '../config';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -10,8 +11,6 @@ interface AuthModalProps {
 }
 
 type AuthStep = 'SELECT' | 'EMAIL_SIGNUP' | 'EMAIL_SIGNIN';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }) => {
   const [step, setStep] = useState<AuthStep>('SELECT');
