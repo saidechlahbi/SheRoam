@@ -318,9 +318,11 @@ curl -X GET http://localhost:3000/api/auth/me \
 - [ ] Set up proper CORS origins
 - [ ] Enable HTTPS
 - [ ] Set secure cookie flags
-- [ ] Configure production database
-- [ ] Add rate limiting
+- [ ] Configure production database (consider PostgreSQL/MySQL for production)
+- [ ] **Add rate limiting** (e.g., express-rate-limit) to prevent brute force attacks
+- [ ] Implement persistent session store (Redis, MongoDB)
 - [ ] Set up monitoring and logging
+- [ ] Configure database backups
 
 ### Environment Variables for Production
 

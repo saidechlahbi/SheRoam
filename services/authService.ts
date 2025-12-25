@@ -3,6 +3,9 @@ import { UserProfile } from '../types';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 // Token management
+// Note: Storing tokens in localStorage provides convenience but has XSS vulnerability.
+// The primary authentication is via HTTP-only cookies set by the server.
+// localStorage is used as a backup for when cookies are not available.
 export const getToken = (): string | null => {
   return localStorage.getItem('auth_token');
 };
@@ -100,17 +103,16 @@ export const isAuthenticated = (): boolean => {
   return !!getToken();
 };
 
-// Handle OAuth callback (extract token from URL)
-export const handleOAuthCallback = (): string | null => {
+// Handle OAuth callback (check for success parameter)
+export const handleOAuthCallback = (): boolean => {
   const urlParams = new URLSearchParams(window.location.search);
-  const token = urlParams.get('token');
+  const authSuccess = urlParams.get('auth');
   
-  if (token) {
-    setToken(token);
+  if (authSuccess === 'success') {
     // Clean URL
     window.history.replaceState({}, document.title, window.location.pathname);
-    return token;
+    return true;
   }
   
-  return null;
+  return false;
 };

@@ -21,11 +21,11 @@ const App: React.FC = () => {
   // Check for OAuth callback and restore user session
   useEffect(() => {
     const initAuth = async () => {
-      // Handle OAuth callback
-      const token = authService.handleOAuthCallback();
+      // Handle OAuth callback (returns true if successful)
+      const oauthSuccess = authService.handleOAuthCallback();
       
-      // Try to get current user if we have a token
-      if (token || authService.isAuthenticated()) {
+      // Try to get current user if we have a token or OAuth was successful
+      if (oauthSuccess || authService.isAuthenticated()) {
         try {
           const currentUser = await authService.getCurrentUser();
           if (currentUser) {

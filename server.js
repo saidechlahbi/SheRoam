@@ -30,6 +30,8 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(cookieParser());
+// Note: Using memory session store for development. 
+// For production, use a persistent store like connect-redis or connect-mongo
 app.use(session({
 	secret: SESSION_SECRET,
 	resave: false,
@@ -306,15 +308,15 @@ app.get('/api/auth/google/callback',
 		// Generate JWT token
 		const token = generateToken(req.user);
 		
-		// Set cookie
+		// Set cookie (primary method)
 		res.cookie('token', token, {
 			httpOnly: true,
 			secure: process.env.NODE_ENV === 'production',
 			maxAge: 7 * 24 * 60 * 60 * 1000
 		});
 		
-		// Redirect to frontend with token
-		res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?token=${token}`);
+		// Redirect to frontend without token in URL (more secure)
+		res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?auth=success`);
 	}
 );
 
