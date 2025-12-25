@@ -9,12 +9,15 @@ interface AuthModalProps {
   onLogin: (user: UserProfile) => void;
 }
 
-type AuthStep = 'SELECT' | 'EMAIL' | 'VERIFY';
+type AuthStep = 'SELECT' | 'EMAIL_SIGNUP' | 'EMAIL_SIGNIN';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }) => {
   const [step, setStep] = useState<AuthStep>('SELECT');
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState<string | null>(null);
   const [error, setError] = useState('');
 
@@ -23,71 +26,157 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }) => {
     if (isOpen) {
       setStep('SELECT');
       setEmail('');
-      setCode('');
+      setPassword('');
+      setName('');
       setError('');
       setIsLoading(null);
     }
   }, [isOpen]);
 
+  // Check for OAuth callback token
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    const auth = params.get('auth');
+    
+    if (token && auth === 'success') {
+      // Store token
+      localStorage.setItem('authToken', token);
+      
+      // Fetch user profile
+      fetch(`${API_URL}/api/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.user) {
+            onLogin(data.user);
+          }
+        })
+        .catch(err => console.error('Failed to fetch user:', err));
+      
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [onLogin]);
+
   if (!isOpen) return null;
 
-  const handleSocialLogin = (provider: string) => {
-    setIsLoading(provider);
-    // Simulate network request
-    setTimeout(() => {
-      onLogin({
-        name: 'Sarah Jenkins',
-        email: 'sarah.jenkins@example.com',
-        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150&h=150'
-      });
-      setIsLoading(null);
-    }, 1500);
+  const handleGoogleLogin = () => {
+    setIsLoading('Google');
+    // Redirect to Google OAuth
+    window.location.href = `${API_URL}/api/auth/google`;
   };
 
-  const handleSendCode = (e: React.FormEvent) => {
+  const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    
     if (!email.includes('@') || !email.includes('.')) {
       setError('Please enter a valid email address.');
       return;
     }
-    setError('');
-    setIsLoading('email');
     
-    // Simulate sending code
-    setTimeout(() => {
-      setIsLoading(null);
-      setStep('VERIFY');
-    }, 1200);
-  };
-
-  const handleVerifyCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (code.length < 4) {
-      setError('Please enter the 4-digit code sent to your email.');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long.');
       return;
     }
-    setError('');
-    setIsLoading('verify');
 
-    // Simulate verification
-    setTimeout(() => {
-      if (code === '1234') {
-        onLogin({
-          name: email.split('@')[0],
-          email: email,
-        });
-      } else {
-        setError('Invalid code. Try 1234.');
+    setIsLoading('email');
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password, name }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to sign up');
         setIsLoading(null);
+        return;
       }
-    }, 1500);
+
+      // Store token
+      localStorage.setItem('authToken', data.token);
+
+      // Login user
+      onLogin(data.user);
+      setIsLoading(null);
+    } catch (error) {
+      console.error('Signup error:', error);
+      setError('Network error. Please try again.');
+      setIsLoading(null);
+    }
+  };
+
+  const handleEmailSignin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!email.includes('@') || !email.includes('.')) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
+    if (password.length < 1) {
+      setError('Please enter your password.');
+      return;
+    }
+
+    setIsLoading('email');
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/signin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to sign in');
+        setIsLoading(null);
+        return;
+      }
+
+      // Store token
+      localStorage.setItem('authToken', data.token);
+
+      // Login user
+      onLogin(data.user);
+      setIsLoading(null);
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('Network error. Please try again.');
+      setIsLoading(null);
+    }
   };
 
   const renderContent = () => {
     switch (step) {
-      case 'EMAIL':
+      case 'EMAIL_SIGNUP':
         return (
-          <form onSubmit={handleSendCode} className="space-y-4 animate-fade-in">
+          <form onSubmit={handleEmailSignup} className="space-y-4 animate-fade-in">
+            <div className="text-left">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name (Optional)</label>
+              <input 
+                type="text" 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your name"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition"
+              />
+            </div>
             <div className="text-left">
               <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
               <input 
@@ -96,52 +185,80 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }) => {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition"
+                required
                 autoFocus
+              />
+            </div>
+            <div className="text-left">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 8 characters"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition"
+                required
+                minLength={8}
               />
             </div>
             {error && <p className="text-red-500 text-sm text-left">{error}</p>}
             <button 
               type="submit"
               disabled={!!isLoading}
-              className="w-full bg-rose-600 text-white py-3.5 rounded-xl font-medium hover:bg-rose-700 transition flex justify-center items-center"
+              className="w-full bg-rose-600 text-white py-3.5 rounded-xl font-medium hover:bg-rose-700 transition flex justify-center items-center disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {isLoading === 'email' ? <Loader2 className="animate-spin w-5 h-5" /> : 'Send Code'}
+              {isLoading === 'email' ? <Loader2 className="animate-spin w-5 h-5" /> : 'Sign Up'}
+            </button>
+            <button 
+              type="button"
+              onClick={() => setStep('EMAIL_SIGNIN')}
+              className="text-sm text-gray-500 hover:text-rose-600 transition"
+            >
+              Already have an account? Sign in
             </button>
           </form>
         );
 
-      case 'VERIFY':
+      case 'EMAIL_SIGNIN':
         return (
-          <form onSubmit={handleVerifyCode} className="space-y-4 animate-fade-in">
-             <div className="text-left">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Verification Code</label>
-              <p className="text-xs text-gray-500 mb-3">We sent a code to <span className="font-semibold">{email}</span></p>
-              <div className="flex gap-2 justify-center my-4">
-                 <input 
-                  type="text" 
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  placeholder="1234"
-                  className="w-full text-center text-3xl tracking-[1em] font-mono py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-rose-500 outline-none transition"
-                  maxLength={4}
-                  autoFocus
-                />
-              </div>
+          <form onSubmit={handleEmailSignin} className="space-y-4 animate-fade-in">
+            <div className="text-left">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+              <input 
+                type="email" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition"
+                required
+                autoFocus
+              />
             </div>
-            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+            <div className="text-left">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Your password"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition"
+                required
+              />
+            </div>
+            {error && <p className="text-red-500 text-sm text-left">{error}</p>}
             <button 
               type="submit"
               disabled={!!isLoading}
-              className="w-full bg-rose-600 text-white py-3.5 rounded-xl font-medium hover:bg-rose-700 transition flex justify-center items-center"
+              className="w-full bg-rose-600 text-white py-3.5 rounded-xl font-medium hover:bg-rose-700 transition flex justify-center items-center disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {isLoading === 'verify' ? <Loader2 className="animate-spin w-5 h-5" /> : 'Verify & Login'}
+              {isLoading === 'email' ? <Loader2 className="animate-spin w-5 h-5" /> : 'Sign In'}
             </button>
             <button 
               type="button"
-              onClick={() => setStep('EMAIL')}
+              onClick={() => setStep('EMAIL_SIGNUP')}
               className="text-sm text-gray-500 hover:text-rose-600 transition"
             >
-              Change email address
+              Don't have an account? Sign up
             </button>
           </form>
         );
@@ -151,7 +268,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }) => {
         return (
           <div className="space-y-4 animate-fade-in">
             <button 
-              onClick={() => handleSocialLogin('Google')}
+              onClick={handleGoogleLogin}
               disabled={!!isLoading}
               className="w-full flex items-center justify-center gap-3 px-6 py-3.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition font-medium text-gray-700 relative group overflow-hidden disabled:opacity-70 disabled:cursor-not-allowed"
             >
@@ -169,36 +286,24 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }) => {
                  </>
                )}
             </button>
-
-            <button 
-               onClick={() => handleSocialLogin('Facebook')}
-               disabled={!!isLoading}
-               className="w-full flex items-center justify-center gap-3 px-6 py-3.5 bg-[#1877F2] text-white rounded-xl hover:bg-[#1864D9] transition font-medium disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isLoading === 'Facebook' ? (
-                 <Loader2 className="w-5 h-5 animate-spin text-white" />
-               ) : (
-                 <>
-                  <Facebook className="w-5 h-5 fill-current" />
-                  <span>Continue with Facebook</span>
-                 </>
-               )}
-            </button>
             
             <button 
-               onClick={() => setStep('EMAIL')}
+               onClick={() => setStep('EMAIL_SIGNUP')}
                disabled={!!isLoading}
                className="w-full flex items-center justify-center gap-3 px-6 py-3.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition font-medium text-gray-700 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-               {isLoading === 'Email' ? (
-                 <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
-               ) : (
-                 <>
-                  <Mail className="w-5 h-5" />
-                  <span>Continue with Email</span>
-                 </>
-               )}
+               <Mail className="w-5 h-5" />
+               <span>Sign Up with Email</span>
             </button>
+
+            <div className="text-center">
+              <button 
+                onClick={() => setStep('EMAIL_SIGNIN')}
+                className="text-sm text-gray-500 hover:text-rose-600 transition"
+              >
+                Already have an account? <span className="font-semibold">Sign in</span>
+              </button>
+            </div>
           </div>
         );
     }
@@ -216,7 +321,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }) => {
       <div className="relative bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-fade-in-up overflow-hidden">
         <div className="flex items-center justify-between mb-6">
            {step !== 'SELECT' ? (
-             <button onClick={() => setStep(step === 'VERIFY' ? 'EMAIL' : 'SELECT')} className="p-2 -ml-2 text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition">
+             <button onClick={() => setStep('SELECT')} className="p-2 -ml-2 text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition">
                 <ArrowLeft className="w-5 h-5" />
              </button>
            ) : <div />}
@@ -231,10 +336,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }) => {
 
         <div className="text-center mb-8">
           <h3 className="text-2xl font-serif font-bold text-gray-900 mb-2">
-            {step === 'VERIFY' ? 'Check your Inbox' : step === 'EMAIL' ? 'Your Email' : 'Join SheRoam'}
+            {step === 'EMAIL_SIGNIN' ? 'Welcome Back' : step === 'EMAIL_SIGNUP' ? 'Create Account' : 'Join SheRoam'}
           </h3>
           <p className="text-gray-500">
-            {step === 'VERIFY' ? 'Enter the 4-digit code to verify your account.' : 'Connect with travelers, share stories, and explore safely.'}
+            {step === 'EMAIL_SIGNIN' ? 'Sign in to continue your journey' : 'Connect with travelers, share stories, and explore safely.'}
           </p>
         </div>
 

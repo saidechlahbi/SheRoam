@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import SafetyAnalysis from './components/SafetyAnalysis';
 import PlaceFinder from './components/PlaceFinder';
@@ -11,10 +11,40 @@ import Footer from './components/Footer';
 import { AppView, UserProfile } from './types';
 import { ArrowRight, Globe, ShieldCheck, Heart, Search, CheckCircle, Users } from 'lucide-react';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.HOME);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
+
+  // Check for existing session on mount
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      // Verify token and fetch user data
+      fetch(`${API_URL}/api/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+        .then(res => {
+          if (!res.ok) {
+            throw new Error('Invalid token');
+          }
+          return res.json();
+        })
+        .then(data => {
+          if (data.user) {
+            setUser(data.user);
+          }
+        })
+        .catch(err => {
+          console.error('Failed to restore session:', err);
+          localStorage.removeItem('authToken');
+        });
+    }
+  }, []);
 
   const handleLogin = (userData: UserProfile) => {
     setUser(userData);
@@ -23,6 +53,7 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     setUser(null);
+    localStorage.removeItem('authToken');
   };
 
   // Helper to wrap content with footer (only for main pages that scroll)
