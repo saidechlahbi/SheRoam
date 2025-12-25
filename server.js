@@ -45,7 +45,16 @@ const sessionSecret = SESSION_SECRET || 'dev-session-secret-change-in-production
 
 // Middleware
 app.use(helmet({
-	contentSecurityPolicy: false, // Allow inline styles for React
+	contentSecurityPolicy: {
+		directives: {
+			defaultSrc: ["'self'"],
+			scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://unpkg.com"],
+			styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
+			fontSrc: ["'self'", "https://fonts.gstatic.com"],
+			imgSrc: ["'self'", "data:", "https:", "http:"],
+			connectSrc: ["'self'"],
+		},
+	},
 }));
 app.use(cors({
 	origin: process.env.CLIENT_URL || 'http://localhost:5173',
@@ -55,6 +64,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Session middleware (required for Passport)
+// Note: Using JWT for API authentication, session is only for OAuth flow
 app.use(session({
 	secret: sessionSecret,
 	resave: false,
@@ -75,6 +85,13 @@ const authLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000, // 15 minutes
 	max: 5, // 5 requests per window
 	message: 'Too many authentication attempts, please try again later.'
+});
+
+// Rate limiting for protected API endpoints
+const apiLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 100, // 100 requests per window
+	message: 'Too many requests, please try again later.'
 });
 
 // Database setup
@@ -330,7 +347,7 @@ app.get('/api/auth/google/callback',
 );
 
 // Get Current User (Protected Route)
-app.get('/api/auth/me', authenticateToken, (req, res) => {
+app.get('/api/auth/me', apiLimiter, authenticateToken, (req, res) => {
 	db.get(
 		'SELECT id, email, name, avatar, provider FROM users WHERE id = ?',
 		[req.user.id],
@@ -344,7 +361,7 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
 });
 
 // Update User Profile (Protected Route)
-app.put('/api/auth/profile', authenticateToken, (req, res) => {
+app.put('/api/auth/profile', apiLimiter, authenticateToken, (req, res) => {
 	const { name, avatar } = req.body;
 
 	if (!name || name.length === 0) {
